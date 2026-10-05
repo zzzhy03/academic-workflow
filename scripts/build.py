@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import zipfile
-from validate import ROOT, validate
+from validate import ROOT, validate, skill_files
 
 def make_zip(destination, entries):
     with zipfile.ZipFile(destination, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
@@ -30,7 +30,7 @@ def build(output):
     paths = []
     for name in names:
         folder = ROOT / 'skills' / name
-        entries = [(name + '/' + file.relative_to(folder).as_posix(), file) for file in folder.rglob('*') if file.is_file()]
+        entries = [(name + '/' + file.relative_to(folder).as_posix(), file) for file in skill_files(folder)]
         entries.append((name + '/LICENSE', ROOT / 'LICENSE'))
         archive = output / (name + '.zip')
         make_zip(archive, entries)

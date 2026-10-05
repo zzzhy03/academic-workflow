@@ -24,7 +24,7 @@ class DistributionTests(unittest.TestCase):
                 self.assertEqual(archive.read_bytes(), (second / archive.name).read_bytes())
                 with zipfile.ZipFile(archive) as packed:
                     for source in (ROOT / 'skills' / name).rglob('*'):
-                        if source.is_file():
+                        if source.is_file() and source.name != '.DS_Store':
                             member = name + '/' + source.relative_to(ROOT / 'skills' / name).as_posix()
                             self.assertEqual(packed.read(member), source.read_bytes())
                     self.assertEqual(packed.read(name + '/LICENSE'), (ROOT / 'LICENSE').read_bytes())
@@ -35,6 +35,18 @@ class DistributionTests(unittest.TestCase):
             for line in (first / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
                 digest, file = line.split('  ', 1)
                 self.assertEqual(digest, hashlib.sha256((first / file).read_bytes()).hexdigest())
+
+    def test_packager_omits_system_metadata(self):
+        spec = importlib.util.spec_from_file_location('validate', ROOT / 'scripts/validate.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'SKILL.md').write_text('Instructions', encoding='utf-8')
+            (root / '.DS_Store').write_bytes(b'Finder metadata')
+            (root / '__pycache__').mkdir()
+            (root / '__pycache__/generated.pyc').write_bytes(b'Cache')
+            self.assertEqual([p.name for p in module.skill_files(root)], ['SKILL.md'])
 
     def test_validator_rejects_missing_reference(self):
         spec = importlib.util.spec_from_file_location('validate', ROOT / 'scripts/validate.py')

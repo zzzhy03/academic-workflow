@@ -1,11 +1,28 @@
 #!/usr/bin/env python3
 """Validate the public skill collection using only Python's standard library."""
 import json
+import os
 from pathlib import Path
 import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+
+def skill_files(folder):
+    """Return distributable files without OS metadata or local runtime caches."""
+    ignored_dirs = {'.git', 'node_modules', '__pycache__', '.venv', '.pytest_cache'}
+    for directory, dirs, files in os.walk(folder, followlinks=False):
+        dirs[:] = sorted(name for name in dirs if name not in ignored_dirs)
+        for name in dirs:
+            if (Path(directory) / name).is_symlink():
+                raise ValueError('Skill distributions must not contain symlinked directories')
+        for name in sorted(files):
+            if name in {'.DS_Store', 'Thumbs.db', '.env'} or name.startswith('.env.') or name.endswith(('.pyc', '.pyo')):
+                continue
+            file = Path(directory) / name
+            if file.is_symlink():
+                raise ValueError('Skill distributions must not contain symlinks: ' + str(file))
+            yield file
 
 def validate(root=ROOT):
     config = json.loads((root / 'dependencies.json').read_text(encoding='utf-8'))
@@ -30,11 +47,7 @@ def validate(root=ROOT):
             raise ValueError(str(skill) + ': frontmatter name does not match directory')
         if not re.search(r'^description:\s*\S', front, re.M):
             raise ValueError(str(skill) + ': missing description')
-        for file in folder.rglob('*'):
-            if file.is_symlink():
-                raise ValueError('Skill distributions must not contain symlinks: ' + str(file))
-            if not file.is_file():
-                continue
+        for file in skill_files(folder):
             if file.suffix == '.md':
                 content = file.read_text(encoding='utf-8')
                 if re.search(r'/(Users|Volumes)/', content):
