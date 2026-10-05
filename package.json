@@ -1,0 +1,31 @@
+{
+  "name": "academic-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reusable academic writing and figure-design workflows for AI agents.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "bin": {
+    "academic-workflow": "bin/academic-workflow.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "skills/",
+    "dependencies.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test && node scripts/python.mjs -m unittest discover -s test -p '*_test.py'",
+    "validate": "node scripts/python.mjs scripts/validate.py",
+    "build": "node scripts/python.mjs scripts/build.py"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zzzhy03/academic-workflow.git"
+  }
+}

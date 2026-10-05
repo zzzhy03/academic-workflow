@@ -1,0 +1,4 @@
+interface:
+  display_name: "Academic Paper Writing"
+  short_description: "Revise papers, check consistency, and prepare final PDFs"
+  default_prompt: "Use $academic-paper-writing to revise this manuscript and check its consistency, readability, and final layout."

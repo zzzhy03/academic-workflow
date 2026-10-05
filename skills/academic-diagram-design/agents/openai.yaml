@@ -1,0 +1,4 @@
+interface:
+  display_name: "Academic Diagram Design"
+  short_description: "Design editable CS/AI paper diagrams from prose"
+  default_prompt: "Use $academic-diagram-design to turn this method description into an editable paper-ready diagram."

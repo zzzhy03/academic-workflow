@@ -1,0 +1,14 @@
+name: Suggest an improvement
+description: Propose a reusable improvement to an academic workflow.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What recurring task or difficulty should this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+      description: Explain the principle and when it applies, rather than adding a rule for only one paper.

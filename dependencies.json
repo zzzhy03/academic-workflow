@@ -1,0 +1,17 @@
+{
+  "repository": "zzzhy03/academic-workflow",
+  "skillsCliVersion": "1.7.0",
+  "skills": [
+    "academic-paper-writing",
+    "academic-diagram-design"
+  ],
+  "openPencil": {
+    "skillSource": "https://github.com/open-pencil/open-pencil/tree/510cdbc36f8d6ff0dcb2a4eb9233a294bd97cca3/skills/open-pencil",
+    "upstreamCommit": "510cdbc36f8d6ff0dcb2a4eb9233a294bd97cca3",
+    "packages": {
+      "@open-pencil/cli": "0.15.1",
+      "@open-pencil/mcp": "0.15.1"
+    },
+    "documentation": "https://openpencil.dev/"
+  }
+}

@@ -1,0 +1,22 @@
+name: Workflow problem
+description: Report unclear instructions, a failed step, or an installation problem.
+title: "[Bug] "
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: What were you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened, and what should have happened?
+      description: Include the skill name and relevant step. Remove private manuscript content and credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and version
+      description: Agent/client, operating system, and the installed version or commit if known.
