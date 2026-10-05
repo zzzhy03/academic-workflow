@@ -19,6 +19,10 @@ class DistributionTests(unittest.TestCase):
                 subprocess.run([sys.executable, str(ROOT / 'scripts/build.py'), '--output', str(output)], check=True, capture_output=True)
             first, second = outputs
             names = json.loads((ROOT / 'dependencies.json').read_text(encoding='utf-8'))['skills']
+            self.assertEqual((first / 'install.sh').read_bytes(), (ROOT / 'install.sh').read_bytes())
+            self.assertEqual((first / 'skills.txt').read_text(encoding='utf-8').splitlines(), names)
+            for name in ['skills.txt', 'manifest.json', 'SHA256SUMS']:
+                self.assertNotIn(b'\r\n', (first / name).read_bytes())
             for name in names:
                 archive = first / (name + '.zip')
                 self.assertEqual(archive.read_bytes(), (second / archive.name).read_bytes())

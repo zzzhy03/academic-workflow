@@ -1,6 +1,6 @@
 {
   "name": "academic-workflow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Reusable academic writing and figure-design workflows for AI agents.",
@@ -17,10 +17,11 @@
     "skills/",
     "dependencies.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "install.sh"
   ],
   "scripts": {
-    "test": "node --test && node scripts/python.mjs test/package_test.py",
+    "test": "node --test && node scripts/python.mjs -m unittest discover -s test",
     "validate": "node scripts/python.mjs scripts/validate.py",
     "build": "node scripts/python.mjs scripts/build.py"
   },

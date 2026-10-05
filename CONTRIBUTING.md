@@ -28,6 +28,12 @@ new wording. Installation and packaging changes should exercise observable behav
 such as selection, failure handling, existing configuration preservation, and
 archive contents.
 
+Keep the Bash installer compatible with macOS Bash 3.2 and Linux Bash. Its normal
+file-installation path must not require Node, npm, Python, Git, or jq. Tests use
+local release fixtures and explicit temporary destinations, without changing the
+user's HOME or installed skills. Preserve the manual ZIP and Skills CLI paths
+when changing distribution behavior.
+
 ## Dependency updates
 
 OpenPencil's skill and tools are fetched from upstream rather than vendored.

@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import zipfile
 from validate import ROOT, validate, skill_files
 
@@ -39,15 +40,25 @@ def build(output):
     collection = output / 'academic-workflow-skills.zip'
     make_zip(collection, collections)
     paths.append(collection)
+    installer = output / 'install.sh'
+    shutil.copyfile(ROOT / 'install.sh', installer)
+    installer.chmod(0o755)
+    catalog = output / 'skills.txt'
+    with catalog.open('w', encoding='utf-8', newline='\n') as file:
+        file.write('\n'.join(names) + '\n')
     manifest = {
         'version': package['version'], 'commit': commit, 'skills': names,
         'archives': [{'file': file.name, 'sha256': hashlib.sha256(file.read_bytes()).hexdigest()} for file in paths],
-        'optionalDependencies': json.loads((ROOT / 'dependencies.json').read_text(encoding='utf-8'))['openPencil']
+        'optionalDependencies': json.loads((ROOT / 'dependencies.json').read_text(encoding='utf-8'))['openPencil'],
+        'installer': {'file': installer.name, 'sha256': hashlib.sha256(installer.read_bytes()).hexdigest()},
+        'catalog': {'file': catalog.name, 'sha256': hashlib.sha256(catalog.read_bytes()).hexdigest()}
     }
     manifest_path = output / 'manifest.json'
-    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
-    paths.append(manifest_path)
-    (output / 'SHA256SUMS').write_text(''.join(hashlib.sha256(file.read_bytes()).hexdigest() + '  ' + file.name + '\n' for file in paths), encoding='utf-8')
+    with manifest_path.open('w', encoding='utf-8', newline='\n') as file:
+        file.write(json.dumps(manifest, indent=2) + '\n')
+    paths.extend([installer, catalog, manifest_path])
+    with (output / 'SHA256SUMS').open('w', encoding='utf-8', newline='\n') as file:
+        file.write(''.join(hashlib.sha256(item.read_bytes()).hexdigest() + '  ' + item.name + '\n' for item in paths))
     print('Built', len(names), 'individual ZIPs and one collection ZIP in', output)
 
 if __name__ == '__main__':
