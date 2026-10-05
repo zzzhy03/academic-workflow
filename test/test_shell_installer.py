@@ -45,7 +45,7 @@ class ShellInstallerTests(unittest.TestCase):
             + 'from urllib.parse import urlsplit\n'
             + 'args=sys.argv[1:]; url=args[-1]\n'
             + 'if url.endswith("/releases/latest"):\n'
-            + ' print("https://github.com/zzzhy03/academic-workflow/releases/tag/v0.2.0",end="");sys.exit(0)\n'
+            + ' print("https://github.com/zzzhy03/academic-workflow/releases/tag/v0.3.0",end="");sys.exit(0)\n'
             + 'source=Path(os.environ["ACADEMIC_TEST_RELEASE"])/Path(urlsplit(url).path).name\n'
             + 'if not source.is_file():sys.exit(22)\n'
             + 'target=Path(args[args.index("--output")+1]);shutil.copyfile(source,target)\n',
@@ -61,19 +61,21 @@ class ShellInstallerTests(unittest.TestCase):
     def run_installer(self, *args, piped=False):
         if piped:
             command = ['/bin/bash', '-s', '--', *args]
-            text = (ROOT / 'install.sh').read_text(encoding='utf-8')
+            text = (self.release / 'install.sh').read_text(encoding='utf-8')
         else:
-            command = ['/bin/bash', str(ROOT / 'install.sh'), *args]
+            command = ['/bin/bash', str(self.release / 'install.sh'), *args]
             text = None
         return subprocess.run(command, input=text, text=True, cwd=self.work,
                               env=self.environment, capture_output=True, timeout=30)
 
     def checksums(self):
-        members = [p for p in self.release.iterdir() if p.is_file() and p.name != 'SHA256SUMS']
-        (self.release / 'SHA256SUMS').write_text(
-            ''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in members),
-            encoding='utf-8'
-        )
+        import re
+        installer = self.release / 'install.sh'
+        text = installer.read_text(encoding='utf-8')
+        for archive in self.release.glob('*.zip'):
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            text = re.sub(r'(' + re.escape(archive.name) + r"\) printf '%s\\n' )[0-9a-f]{64}", lambda m: m.group(1) + digest, text)
+        installer.write_text(text, encoding='utf-8')
 
     def assert_ok(self, result):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -89,12 +91,12 @@ class ShellInstallerTests(unittest.TestCase):
 
     def test_multiple_selection_and_spaces(self):
         result = self.run_installer('--dest', str(self.destination), '--skill', WRITING,
-                                    '--skill', DRAWING, '--skill', WRITING, '--version', 'v0.2.0')
+                                    '--skill', DRAWING, '--skill', WRITING, '--version', 'v0.3.0')
         self.assert_ok(result)
         self.assertEqual(sorted(p.name for p in self.destination.iterdir()), sorted([WRITING, DRAWING]))
 
     def test_default_all_for_codex_project(self):
-        self.assert_ok(self.run_installer('--project'))
+        self.assert_ok(self.run_installer('--agent', 'codex', '--project'))
         for name in [WRITING, DRAWING]:
             self.assertTrue((self.work / '.agents/skills' / name / 'SKILL.md').is_file())
 
@@ -115,7 +117,7 @@ class ShellInstallerTests(unittest.TestCase):
         args = ['--dest', str(self.destination), '--skill', WRITING]
         self.assertNotEqual(self.run_installer(*args).returncode, 0)
         self.assertTrue((target / 'old-note.md').exists())
-        self.assert_ok(self.run_installer(*args, '--replace'))
+        self.assert_ok(self.run_installer('update', *args))
         self.assertTrue((target / 'SKILL.md').exists())
         self.assertFalse((target / 'old-note.md').exists())
         backups = list(self.work.glob('.academic-workflow-backup.*'))
@@ -129,7 +131,7 @@ class ShellInstallerTests(unittest.TestCase):
         (target / 'keep').write_text('keep', encoding='utf-8')
         with (self.release / (WRITING + '.zip')).open('ab') as file:
             file.write(b'corruption')
-        result = self.run_installer('--dest', str(self.destination), '--skill', WRITING, '--replace')
+        result = self.run_installer('update', '--dest', str(self.destination), '--skill', WRITING)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((target / 'keep').read_text(), 'keep')
         self.assertFalse(list(self.work.glob('.academic-workflow-backup.*')))
@@ -163,16 +165,49 @@ class ShellInstallerTests(unittest.TestCase):
         source.mkdir()
         (source / 'keep').write_text('source', encoding='utf-8')
         (self.destination / WRITING).symlink_to(source, target_is_directory=True)
-        result = self.run_installer('--dest', str(self.destination), '--skill', WRITING, '--replace')
+        result = self.run_installer('update', '--dest', str(self.destination), '--skill', WRITING)
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue((self.destination / WRITING).is_symlink())
         self.assertEqual((source / 'keep').read_text(), 'source')
 
-    def test_unknown_skill_and_changed_catalog_are_rejected(self):
+    def test_unknown_skill_is_rejected(self):
         self.assertNotEqual(self.run_installer('--dest', str(self.destination), '--skill', '../../elsewhere').returncode, 0)
-        (self.release / 'skills.txt').write_text('other-skill\n', encoding='utf-8')
-        self.assertNotEqual(self.run_installer('--dest', str(self.destination)).returncode, 0)
         self.assertFalse(self.destination.exists())
+
+    def test_both_clients_receive_the_selected_skill(self):
+        self.assert_ok(self.run_installer('--agent', 'all', '--project', '--skill', WRITING))
+        for client in ['.agents', '.claude']:
+            self.assertTrue((self.work / client / 'skills' / WRITING / 'SKILL.md').exists())
+
+    def test_openpencil_uses_the_bundled_helper_for_both_clients(self):
+        calls = self.root / 'setup-calls.jsonl'
+        self.environment['ACADEMIC_SETUP_CALLS'] = str(calls)
+        node = self.tools / 'node'
+        node.write_text('#!' + sys.executable + '\n'
+            + 'import os,sys,json\nfrom pathlib import Path\n'
+            + 'helper=Path(sys.argv[1]); assert helper.name=="openpencil.mjs"\n'
+            + 'assert (helper.parent.parent/"integrations/open-pencil/LICENSE.txt").is_file()\n'
+            + 'with open(os.environ["ACADEMIC_SETUP_CALLS"],"a") as f: f.write(json.dumps(sys.argv[2:])+"\\n")\n', encoding='utf-8')
+        node.chmod(0o755)
+        self.assert_ok(self.run_installer('--agent', 'all', '--project', '--skill', DRAWING, '--with-openpencil'))
+        import json
+        rows=[json.loads(line) for line in calls.read_text().splitlines()]
+        self.assertEqual(len(rows),2)
+        self.assertIn('--check',rows[0])
+        self.assertNotIn('--check',rows[1])
+        for client in ['codex','claude-code']:
+            self.assertIn(client,rows[1])
+        for client in ['.agents','.claude']:
+            self.assertTrue((self.work/client/'skills'/DRAWING/'SKILL.md').is_file())
+
+    def test_requested_version_loads_its_matching_installer(self):
+        text=(self.release/'install.sh').read_text(encoding='utf-8')
+        old=self.root/'older-installer.sh'
+        old.write_text(text.replace('release_version=v0.3.0','release_version=v0.2.9'),encoding='utf-8')
+        result=subprocess.run(['/bin/bash',str(old),'--version','v0.3.0','--dest',str(self.destination),'--skill',WRITING],
+            cwd=self.work,env=self.environment,capture_output=True,text=True,timeout=30)
+        self.assert_ok(result)
+        self.assertTrue((self.destination/WRITING/'SKILL.md').exists())
 
 
 if __name__ == '__main__':

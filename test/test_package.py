@@ -19,10 +19,13 @@ class DistributionTests(unittest.TestCase):
                 subprocess.run([sys.executable, str(ROOT / 'scripts/build.py'), '--output', str(output)], check=True, capture_output=True)
             first, second = outputs
             names = json.loads((ROOT / 'dependencies.json').read_text(encoding='utf-8'))['skills']
-            self.assertEqual((first / 'install.sh').read_bytes(), (ROOT / 'install.sh').read_bytes())
-            self.assertEqual((first / 'skills.txt').read_text(encoding='utf-8').splitlines(), names)
-            for name in ['skills.txt', 'manifest.json', 'SHA256SUMS']:
-                self.assertNotIn(b'\r\n', (first / name).read_bytes())
+            expected = {name + '.zip' for name in names} | {'academic-workflow-skills.zip', 'install.sh'}
+            self.assertEqual({p.name for p in first.iterdir()}, expected)
+            installer = (first / 'install.sh').read_text(encoding='utf-8')
+            self.assertEqual((first / 'install.sh').read_bytes(), (second / 'install.sh').read_bytes())
+            for archive in first.glob('*.zip'):
+                self.assertIn(hashlib.sha256(archive.read_bytes()).hexdigest(), installer)
+            self.assertNotIn(b'\r\n', (first / 'install.sh').read_bytes())
             for name in names:
                 archive = first / (name + '.zip')
                 self.assertEqual(archive.read_bytes(), (second / archive.name).read_bytes())
@@ -36,9 +39,8 @@ class DistributionTests(unittest.TestCase):
                 self.assertEqual(packed.read('LICENSE'), (ROOT / 'LICENSE').read_bytes())
                 for name in names:
                     self.assertIn('skills/' + name + '/SKILL.md', packed.namelist())
-            for line in (first / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
-                digest, file = line.split('  ', 1)
-                self.assertEqual(digest, hashlib.sha256((first / file).read_bytes()).hexdigest())
+                self.assertIn('lib/openpencil.mjs', packed.namelist())
+                self.assertIn('integrations/open-pencil/LICENSE.txt', packed.namelist())
 
     def test_packager_omits_system_metadata(self):
         spec = importlib.util.spec_from_file_location('validate', ROOT / 'scripts/validate.py')

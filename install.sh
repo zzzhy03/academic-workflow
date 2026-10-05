@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
-# Install instruction-only skills from an Academic Workflow GitHub Release.
-# Compatible with macOS Bash 3.2 and Linux Bash. No Node, Python, Git, or jq required.
+# Academic Workflow: install release skills and optional drawing tools.
 set -euo pipefail
 
+# BEGIN RELEASE DATA
+release_version="development"
+available=()
+checksum_for() { return 1; }
+# END RELEASE DATA
+
 repo="https://github.com/zzzhy03/academic-workflow"
-agent="codex"
+original_args=("$@")
+action="install"
+agent="auto"
 scope="global"
 version="latest"
 destination=""
-replace=0
+with_openpencil=0
+mcp_root="$PWD"
 list_only=0
 dry_run=0
 all=0
@@ -22,33 +30,34 @@ pending_backup=""
 die() { printf 'academic-workflow: %s\n' "$*" >&2; exit 1; }
 help() {
   cat <<'HELP'
-Install Academic Workflow skills from a GitHub Release (v0.2.0 or newer).
-Usage: bash install.sh [options]
+Academic Workflow
+Usage: bash install.sh [install|update] [options]
 
---skill NAME      Select a skill; repeat for several
---all             Install all collection skills (default if none selected)
---agent NAME      codex (default) or claude-code
---global          User-wide skill directory (default)
---project         Skill directory under the current project
---dest DIRECTORY  Explicit destination directory, overriding agent/scope
---version TAG     latest (default) or a release tag such as v0.2.0
---replace         Replace selected existing skills and retain a backup
---list            List skills in the selected release without installing
---dry-run         Fetch/verify the catalog and print the plan; do not install
---help            Show this help
+update               Update selected skills, keeping previous directories as backups
+--skill NAME         Select a skill; repeat for several
+--all                Install all collection skills (default)
+--agent TARGET       auto (default), all, codex, claude-code
+--global             User-wide installation (default)
+--project            Install under the current project
+--dest DIRECTORY     Explicit skill installation directory
+--version TAG        latest (default), or a tag such as v0.3.0
+--with-openpencil     Add the official skill, CLI/MCP, and register selected clients
+--mcp-root DIRECTORY  OpenPencil access directory (default: current directory)
+--list               List skills without installing
+--dry-run            Show the plan without installing
+--help               Show this help
 
-Requires Bash, curl, unzip, awk, and sha256sum or shasum.
-Codex defaults to ~/.agents/skills; Claude Code to ~/.claude/skills.
-Use --dest for an existing legacy/custom installation.
-OpenPencil software/MCP setup remains a separate optional workflow.
+File installation needs Bash, curl, and unzip on macOS/Linux.
+OpenPencil setup additionally needs Node/npm and the selected client CLIs.
+The desktop application is installed separately.
 HELP
 }
 cleanup() {
   local result=$?
   if [ -n "$pending_backup" ] && [ ! -e "$pending_target" ] && [ ! -L "$pending_target" ]; then
-    mv "$pending_backup" "$pending_target" ||
-      printf 'Restore the previous installation from %s\n' "$pending_backup" >&2
+    mv "$pending_backup" "$pending_target" || printf 'Restore from %s\n' "$pending_backup" >&2
   fi
+  if [ "$result" -ne 0 ] && [ -n "$backup_dir" ]; then printf 'Backup retained: %s\n' "$backup_dir" >&2; fi
   [ -z "$stage_dir" ] || rm -rf -- "$stage_dir"
   [ -z "$temp_dir" ] || rm -rf -- "$temp_dir"
   return "$result"
@@ -56,10 +65,12 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-
+if [ "$#" -gt 0 ]; then
+  case "$1" in install|update) action="$1"; shift ;; esac
+fi
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --skill|--agent|--dest|--version)
+    --skill|--agent|--dest|--version|--mcp-root)
       [ "$#" -ge 2 ] && [ -n "$2" ] || die "$1 requires a value."
       case "$2" in --*) die "$1 requires a value." ;; esac
       case "$1" in
@@ -67,25 +78,22 @@ while [ "$#" -gt 0 ]; do
         --agent) agent="$2" ;;
         --dest) destination="$2" ;;
         --version) version="$2" ;;
+        --mcp-root) mcp_root="$2" ;;
       esac
       shift 2 ;;
     --all) all=1; shift ;;
     --global) scope="global"; shift ;;
     --project) scope="project"; shift ;;
-    --replace) replace=1; shift ;;
+    --with-openpencil) with_openpencil=1; shift ;;
     --list) list_only=1; shift ;;
     --dry-run) dry_run=1; shift ;;
     --help|-h) help; exit 0 ;;
-    *) die "Unknown option: $1" ;;
+    *) die "Unknown option: $1. Use update to update an existing installation." ;;
   esac
 done
-case "$agent" in codex|claude-code) ;; *) die "Choose --agent codex or claude-code." ;; esac
-if [ "$all" -eq 1 ] && [ "${#selected[@]}" -gt 0 ]; then die "Choose --all or --skill, not both."; fi
-for command in curl unzip awk mktemp; do command -v "$command" >/dev/null || die "Required command missing: $command"; done
-if command -v sha256sum >/dev/null; then hash_command="sha256sum"
-elif command -v shasum >/dev/null; then hash_command="shasum"
-else die "Install sha256sum or shasum to verify release files."
-fi
+case "$agent" in auto|all|codex|claude-code) ;; *) die "Unsupported --agent value." ;; esac
+if [ "$all" -eq 1 ] && [ "${#selected[@]}" -gt 0 ]; then die "Choose --all or --skill."; fi
+for command in curl unzip awk mktemp; do command -v "$command" >/dev/null || die "Required system command missing: $command"; done
 
 download() {
   curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
@@ -94,32 +102,44 @@ download() {
 if [ "$version" = "latest" ]; then
   resolved=$(curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
     --retry 2 --connect-timeout 15 --max-time 60 --output /dev/null --write-out '%{url_effective}' "$repo/releases/latest")
-  case "$resolved" in "$repo/releases/tag/"*) version="${resolved##*/}" ;; *) die "Could not resolve the latest release." ;; esac
+  case "$resolved" in "$repo/releases/tag/"*) version="${resolved##*/}" ;; *) die "Could not resolve latest release." ;; esac
 fi
 [[ "$version" =~ ^v[0-9][A-Za-z0-9._-]*$ ]] || die "Invalid release tag."
 base="$repo/releases/download/$version"
 temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/academic-workflow.XXXXXX")
-download "$base/SHA256SUMS" "$temp_dir/SHA256SUMS"
+if [ "$release_version" != "$version" ]; then
+  [ -z "${ACADEMIC_WORKFLOW_EXPECTED_VERSION:-}" ] || die "Release installer version mismatch."
+  download "$base/install.sh" "$temp_dir/version-install.sh"
+  grep -q '# BEGIN RELEASE DATA' "$temp_dir/version-install.sh" || die "Use this installer with v0.3.0 or newer; older ZIPs can be installed manually."
+  if [ "${#original_args[@]}" -gt 0 ]; then
+    ACADEMIC_WORKFLOW_EXPECTED_VERSION="$version" bash "$temp_dir/version-install.sh" "${original_args[@]}" --version "$version"
+  else
+    ACADEMIC_WORKFLOW_EXPECTED_VERSION="$version" bash "$temp_dir/version-install.sh" --version "$version"
+  fi
+  exit $?
+fi
 verify() {
   local file="$1" expected actual
-  expected=$(awk -v file="$file" '$2 == file {print $1}' "$temp_dir/SHA256SUMS")
-  [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || die "Missing or ambiguous checksum for $file."
-  if [ "$hash_command" = "sha256sum" ]; then
-    actual=$(sha256sum "$temp_dir/$file")
-  else
-    actual=$(shasum -a 256 "$temp_dir/$file")
+  expected=$(checksum_for "$file") || die "No embedded checksum for $file."
+  if command -v sha256sum >/dev/null; then actual=$(sha256sum "$temp_dir/$file")
+  elif command -v shasum >/dev/null; then actual=$(shasum -a 256 "$temp_dir/$file")
+  else die "The system has no SHA-256 verification tool."
   fi
   actual="${actual%% *}"
   [ "$actual" = "$expected" ] || die "Checksum mismatch: $file"
 }
-download "$base/skills.txt" "$temp_dir/skills.txt" ||
-  die "This release has no installer catalog. Use v0.2.0 or newer, or download its ZIPs manually."
-verify "skills.txt"
-available=()
-while IFS= read -r name || [ -n "$name" ]; do
-  [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "Invalid name in release catalog."
-  available["${#available[@]}"]="$name"
-done < "$temp_dir/skills.txt"
+extract() {
+  local file="$1" output="$2" member
+  unzip -tq "$temp_dir/$file" >/dev/null || die "Damaged ZIP: $file"
+  unzip -Z1 "$temp_dir/$file" > "$temp_dir/members"
+  while IFS= read -r member; do
+    case "$member" in /*|*\\*) die "Unsafe archive path." ;; esac
+    case "/$member" in *"/../"*|*"/./"*) die "Unsafe archive path." ;; esac
+  done < "$temp_dir/members"
+  unzip -Z -l "$temp_dir/$file" | awk '$1 ~ /^l/ {exit 1}' || die "Archive symlinks are not allowed."
+  mkdir -p "$output"
+  unzip -q "$temp_dir/$file" -d "$output"
+}
 [ "${#available[@]}" -gt 0 ] || die "The release contains no skills."
 if [ "$list_only" -eq 1 ]; then printf '%s\n' "${available[@]}"; exit 0; fi
 if [ "${#selected[@]}" -eq 0 ]; then selected=("${available[@]}"); fi
@@ -135,59 +155,87 @@ for name in "${selected[@]}"; do
   [ "$duplicate" -eq 1 ] || unique["${#unique[@]}"]="$name"
 done
 selected=("${unique[@]}")
-if [ -z "$destination" ]; then
+agents=()
+case "$agent" in
+  codex|claude-code) agents=("$agent") ;;
+  all) agents=("codex" "claude-code") ;;
+  auto)
+    if command -v codex >/dev/null || [ -d "$HOME/.codex" ]; then agents["${#agents[@]}"]="codex"; fi
+    if command -v claude >/dev/null || [ -d "$HOME/.claude" ]; then agents["${#agents[@]}"]="claude-code"; fi
+    [ "${#agents[@]}" -gt 0 ] || agents=("codex")
+    ;;
+esac
+destinations=()
+if [ -n "$destination" ]; then
+  case "$destination" in /*) ;; *) destination="$PWD/$destination" ;; esac
+  destinations=("$destination")
+else
   if [ "$scope" = "project" ]; then prefix="$PWD"; else prefix="$HOME"; fi
-  if [ "$agent" = "codex" ]; then destination="$prefix/.agents/skills"
-  else destination="$prefix/.claude/skills"
-  fi
+  for client in "${agents[@]}"; do
+    if [ "$client" = "codex" ]; then destinations["${#destinations[@]}"]="$prefix/.agents/skills"
+    else destinations["${#destinations[@]}"]="$prefix/.claude/skills"
+    fi
+  done
 fi
-case "$destination" in /*) ;; *) destination="$PWD/$destination" ;; esac
-printf 'Release: %s\nDestination: %s\n' "$version" "$destination"
-printf 'Selected: %s\n' "${selected[*]}"
-if [ "$dry_run" -eq 1 ]; then printf 'Dry run: installation directory unchanged.\n'; exit 0; fi
+printf 'Release: %s\nSelected: %s\nClients: %s\n' "$version" "${selected[*]}" "${agents[*]}"
+printf 'Destination: %s\n' "${destinations[@]}"
+if [ "$with_openpencil" -eq 1 ]; then
+  printf 'OpenPencil: official skill, CLI/MCP, root %s\n' "$mcp_root"
+  command -v node >/dev/null && command -v npm >/dev/null || die "OpenPencil setup requires Node.js and npm."
+  [ -d "$mcp_root" ] || die "--mcp-root must be an existing directory."
+  mcp_root=$(cd "$mcp_root" && pwd -P)
+fi
+if [ "$dry_run" -eq 1 ]; then printf 'Dry run: no installation changes.\n'; exit 0; fi
 
-# Download and check every selected archive before changing any installed skill.
-mkdir "$temp_dir/extracted"
 for name in "${selected[@]}"; do
   download "$base/$name.zip" "$temp_dir/$name.zip"
   verify "$name.zip"
-  unzip -Z1 "$temp_dir/$name.zip" > "$temp_dir/members"
-  while IFS= read -r member; do
-    case "$member" in "$name/"*) ;; *) die "Unexpected archive path: $member" ;; esac
-    case "/$member" in *"/../"*|*"/./"*|*\\*) die "Unsafe archive path." ;; esac
-  done < "$temp_dir/members"
-  unzip -Z -l "$temp_dir/$name.zip" | awk '$1 ~ /^l/ {exit 1}' ||
-    die "Symlinks are not allowed in skill archives."
-  unzip -q "$temp_dir/$name.zip" -d "$temp_dir/extracted"
+  extract "$name.zip" "$temp_dir/extracted"
   [ -f "$temp_dir/extracted/$name/SKILL.md" ] || die "$name is missing SKILL.md."
-  target="$destination/$name"
-  [ ! -L "$target" ] || die "$target is a symlink; update its source or choose another --dest."
-  if [ -e "$target" ] && [ "$replace" -eq 0 ]; then
-    die "$target already exists. Use --replace to update it with a retained backup."
-  fi
 done
-
-mkdir -p "$destination"
-destination=$(cd "$destination" && pwd -P)
-parent=$(dirname "$destination")
-stage_dir=$(mktemp -d "$parent/.academic-workflow-stage.XXXXXX")
-for name in "${selected[@]}"; do cp -R "$temp_dir/extracted/$name" "$stage_dir/$name"; done
-for name in "${selected[@]}"; do
-  target="$destination/$name"
-  # Recheck in case the destination changed while downloads were running.
-  [ ! -L "$target" ] || die "$target became a symlink; installation stopped."
-  pending_target="$target"
-  pending_backup=""
-  if [ -e "$target" ]; then
-    [ "$replace" -eq 1 ] || die "$target now exists; installation stopped."
-    [ -n "$backup_dir" ] || backup_dir=$(mktemp -d "$parent/.academic-workflow-backup.XXXXXX")
-    pending_backup="$backup_dir/$name"
-    mv "$target" "$pending_backup"
-  fi
-  mv "$stage_dir/$name" "$target"
-  pending_target=""
-  pending_backup=""
-  printf 'Installed %s from %s\n' "$name" "$version"
+setup_args=()
+if [ "$with_openpencil" -eq 1 ]; then
+  download "$base/academic-workflow-skills.zip" "$temp_dir/academic-workflow-skills.zip"
+  verify "academic-workflow-skills.zip"
+  extract "academic-workflow-skills.zip" "$temp_dir/integration"
+  setup_args=("--mcp-root" "$mcp_root")
+  for client in "${agents[@]}"; do setup_args["${#setup_args[@]}"]="--agent"; setup_args["${#setup_args[@]}"]="$client"; done
+  for directory in "${destinations[@]}"; do setup_args["${#setup_args[@]}"]="--dest"; setup_args["${#setup_args[@]}"]="$directory"; done
+  [ "$action" != "update" ] || setup_args["${#setup_args[@]}"]="--update"
+  node "$temp_dir/integration/lib/openpencil.mjs" "${setup_args[@]}" --check
+fi
+for destination in "${destinations[@]}"; do
+  for name in "${selected[@]}"; do
+    target="$destination/$name"
+    [ ! -L "$target" ] || die "$target is a symlink; update its source or select another destination."
+    if [ -e "$target" ] && [ "$action" != "update" ]; then die "$target already exists. Run update to keep a backup and install the new version."; fi
+  done
 done
-[ -z "$backup_dir" ] || printf 'Previous selected skills retained in: %s\n' "$backup_dir"
-printf 'Done. Reopen or refresh the client if the skills are not listed yet.\n'
+for destination in "${destinations[@]}"; do
+  mkdir -p "$destination"
+  destination=$(cd "$destination" && pwd -P)
+  parent=$(dirname "$destination")
+  stage_dir=$(mktemp -d "$parent/.academic-workflow-stage.XXXXXX")
+  for name in "${selected[@]}"; do cp -R "$temp_dir/extracted/$name" "$stage_dir/$name"; done
+  backup_dir=""
+  for name in "${selected[@]}"; do
+    target="$destination/$name"
+    [ ! -L "$target" ] || die "$target became a symlink."
+    pending_target="$target"; pending_backup=""
+    if [ -e "$target" ]; then
+      [ "$action" = "update" ] || die "$target now exists; run update."
+      [ -n "$backup_dir" ] || backup_dir=$(mktemp -d "$parent/.academic-workflow-backup.XXXXXX")
+      pending_backup="$backup_dir/$name"
+      mv "$target" "$pending_backup"
+    fi
+    mv "$stage_dir/$name" "$target"
+    pending_target=""; pending_backup=""
+    printf 'Installed %s\n' "$target"
+  done
+  [ -z "$backup_dir" ] || printf 'Previous versions retained: %s\n' "$backup_dir"
+  rm -rf -- "$stage_dir"; stage_dir=""
+done
+if [ "$with_openpencil" -eq 1 ]; then
+  node "$temp_dir/integration/lib/openpencil.mjs" "${setup_args[@]}"
+fi
+printf 'Done. Refresh the client if the skills are not listed yet.\n'

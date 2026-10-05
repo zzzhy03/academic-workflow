@@ -36,7 +36,7 @@ when changing distribution behavior.
 
 ## Dependency updates
 
-OpenPencil's skill and tools are fetched from upstream rather than vendored.
+OpenPencil's optional skill is bundled at a pinned revision with its license. Tools are installed from upstream.
 Update their pins in `dependencies.json` deliberately. Check package runtime
 requirements, the MCP setup command, desktop compatibility, and the upstream skill's
 references. Never describe a registered MCP server as a successfully connected

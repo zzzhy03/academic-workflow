@@ -7,137 +7,110 @@
 
 ## 已有 skills
 
-- [academic-paper-writing](skills/academic-paper-writing/SKILL.md)：写作、数据与表格核对、
-  一致性、协作编译及终稿检查。
-- [academic-diagram-design](skills/academic-diagram-design/SKILL.md)：可编辑学术示意图、
-  紧凑排版、素材管理及导出检查。
-
-Skill 本体是包含 `SKILL.md`、参考文档等内容的文件夹，不依赖 Node.js 才能读取。
-`agents/openai.yaml` 是可选的 OpenAI 界面元数据，主体格式也适用于 Claude Code。
+- [academic-paper-writing](skills/academic-paper-writing/SKILL.md)：写作、数据与表格核对、一致性、协作编译及终稿检查。
+- [academic-diagram-design](skills/academic-diagram-design/SKILL.md)：可编辑学术示意图、紧凑排版、素材管理及导出检查。作图时可通过 `--with-openpencil` 安装 OpenPencil 官方 skill、CLI/MCP 并配置客户端；桌面应用请按[官方说明](https://github.com/open-pencil/open-pencil)另行安装。
 
 ## 三种安装方式
 
-| 方式 | 需要什么 | 适用情况 |
+| 方式 | 需要什么 | 使用情况 |
 |---|---|---|
-| Release ZIP | 浏览器和解压工具 | 手动安装，或向支持自定义 skill 的客户端上传单个 ZIP |
-| Bash 安装器 | macOS/Linux 的 Bash、curl、unzip、awk 及 sha256sum 或 shasum | 直接从正式 Release 安装，不需要 Node、npm、Git 或 Python |
-| Skills CLI | Node.js 22.20.0+、npm 和 Git | 已习惯通用跨客户端安装工具的用户 |
+| Release ZIP | 浏览器和解压工具 | 直接下载Release ZIP手动安装 |
+| Bash 安装器 | macOS/Linux 的 Bash、curl、unzip | 从正式版本一条命令安装 |
+| Skills CLI | Node.js 22.20.0+、npm 和 Git | 沿用 Skills CLI 安装工作流 |
 
-### 手动下载
+### Release ZIP
 
-从 [最新 Release](https://github.com/zzzhy03/academic-workflow/releases/latest) 下载单个 skill
-或 `academic-workflow-skills.zip` 合集。解压后，把直接包含 `SKILL.md` 的 skill 文件夹
-放到客户端目录，保留 `references/` 等内容；不要把外层合集目录当成一个 skill。
-
-常见全局位置为 Codex 的 `~/.agents/skills/` 和 Claude Code 的 `~/.claude/skills/`。
-已有自定义或旧版安装位置时，沿用当前客户端配置。手动更新前先处理自己的修改，再替换对应目录。
+从 [最新 Release](https://github.com/zzzhy03/academic-workflow/releases/latest) 下载单个 skill ZIP
+或 `academic-workflow-skills.zip` 合集，将其中所需的 skill 文件夹完整放入客户端的技能目录。
+保留文件夹内的参考文档；手动更新时替换对应目录。
 
 ### Bash 安装器
 
-为 Codex 安装全部：
-
 ```bash
-curl -fsSL https://github.com/zzzhy03/academic-workflow/releases/latest/download/install.sh | bash -s -- --agent codex
+curl -fsSL https://github.com/zzzhy03/academic-workflow/releases/latest/download/install.sh | bash
 ```
 
-只为 Claude Code 安装写作 skill：
+默认安装全部学术 skills，并自动识别本机客户端。需要传入参数时，在 `bash` 后加
+`-s --`，再接下表中的命令或参数。
+
+| 命令或参数 | 用途 | 可选项或示例 |
+|---|---|---|
+| `install / update` | 安装或更新，默认 install；update 保留旧目录备份 | `install`、`update` |
+| `--skill NAME` | 选择 skill，可重复指定 | `academic-paper-writing`、`academic-diagram-design` |
+| `--all` | 安装全部学术 skills，默认行为 | `--all` |
+| `--agent TARGET` | 选择客户端；auto 自动识别，all 安装到两者 | `auto`（默认）、`all`、`codex`、`claude-code` |
+| `--global` | 全局安装，默认行为 | `--global` |
+| `--project` | 安装到当前项目 | `--project` |
+| `--dest DIRECTORY` | 沿用已有或自定义安装目录 | `--dest "$HOME/.agents/skills"` |
+| `--version TAG` | 选择正式版本 | `latest`（默认）、`v0.3.0` |
+| `--with-openpencil` | 同时安装作图所需的官方 skill、CLI/MCP，并注册客户端 | `--with-openpencil` |
+| `--mcp-root DIRECTORY` | OpenPencil 可访问的作图目录，默认当前目录 | `--mcp-root "$PWD"` |
+| `--list` | 查看学术 skill 列表，不安装 | `--list` |
+| `--dry-run` | 展示计划，不安装 | `--dry-run` |
+| `--help` | 查看帮助 | `--help` |
+
+例如更新现有安装：
 
 ```bash
-curl -fsSL https://github.com/zzzhy03/academic-workflow/releases/latest/download/install.sh | bash -s -- --agent claude-code --skill academic-paper-writing
+curl -fsSL https://github.com/zzzhy03/academic-workflow/releases/latest/download/install.sh | bash -s -- update
 ```
 
-重复 `--skill` 可以选多个；不指定则安装合集内全部 skills。
+文件会在下载检查完成后安装；已有目录需用 `update` 更新，旧版备份保留在技能加载目录之外。
+自动识别到多个客户端时会分别安装，未识别到时使用通用技能目录。
+已有自定义位置可用 `--dest` 指定；软链接安装应更新其源目录。
 
-| 参数 | 含义 |
-|---|---|
-| `--project` | 安装到当前项目，默认是全局安装 |
-| `--dest 路径` | 指定已有的、自定义的 skill 安装目录 |
-| `--version v0.2.0` | 指定正式版本，默认 latest |
-| `--list` | 查看该版本的 skills，不安装 |
-| `--dry-run` | 下载并验证目录清单，展示计划，不写入安装目录 |
-| `--replace` | 更新选中的已有 skills，同时保留旧目录备份 |
-
-更新时再次运行，并加上 `--replace`：
-
-```bash
-curl -fsSL https://github.com/zzzhy03/academic-workflow/releases/latest/download/install.sh | bash -s -- --agent codex --replace
-```
-
-安装器先确定一个 Release 版本，再下载该版本的目录清单、ZIP 和校验值。
-所有选中压缩包下载、校验完成后才开始安装。默认不覆盖已有目录；
-`--replace` 只替换所选 skills，旧版备份放在加载目录之外，其他 skills 不受影响。
-通过软链接安装的 skill 不会被替换，应更新其源文件或指定其他目录。
-若后续某个安装失败，前面已经完成的安装会保留。
-
-已有旧版或自定义路径时，用 `--dest` 更新那里，避免同一客户端出现多个同名副本。
-要固定安装器本身的版本，可以从指定版本的下载 URL 获取 `install.sh`，
-同时使用 `--version` 指定该版本。
-
-Bash 方式支持 **v0.2.0 及以后**的 Release；旧版仍可手动下载 ZIP。
-Windows 可使用 ZIP、Skills CLI，或在 WSL 等 Linux 环境中使用 Bash 路径。
+选择 `--with-openpencil` 时，需具备 Node/npm 和相应客户端 CLI；
+两个客户端使用相同的配套功能。MCP 注册为用户级，访问范围由 `--mcp-root` 决定。
+已有匹配配置会复用，不同配置会保留并提示检查；`update` 可更新配套技能与软件版本。
+桌面连接需要打开设计文档后验证。Bash 路径支持 macOS/Linux 或 WSL。
 
 ### Skills CLI
 
-`npx skills` 调用的是 [Vercel Labs 的第三方开源安装工具](https://github.com/vercel-labs/skills)，
-并非本项目原创的 CLI，也不是 skill 文件格式标准本身。
+本仓库的增强入口调用 [Vercel Labs Skills CLI](https://github.com/vercel-labs/skills)，
+并提供同样的可选作图配套安装：
 
-交互选择 skills、agent 和安装范围：
+```bash
+npx --yes --package=git+https://github.com/zzzhy03/academic-workflow.git academic-workflow
+```
+
+以下参数用于这个增强入口：
+
+| 命令或参数 | 用途 | 可选项或示例 |
+|---|---|---|
+| `install / update` | 安装或更新，默认 install | `install`、`update` |
+| `--skill NAME` | 选择 skill，可重复指定 | `academic-paper-writing`、`academic-diagram-design` |
+| `--all` | 安装全部学术 skills，默认行为 | `--all` |
+| `--agent TARGET` | 自动识别或指定客户端 | `auto`（默认）、`all`、`codex`、`claude-code` |
+| `--global` | 全局安装，默认行为 | `--global` |
+| `--project` | 安装到当前项目 | `--project` |
+| `--with-openpencil` | 同时安装官方 skill、CLI/MCP 并注册客户端 | `--with-openpencil` |
+| `--mcp-root DIRECTORY` | OpenPencil 可访问的作图目录，默认当前目录 | `--mcp-root "$PWD"` |
+| `--yes` | 接受 Skills CLI 的安装确认 | `--yes` |
+| `--dry-run` | 展示计划，不安装 | `--dry-run` |
+| `--help` | 查看帮助 | `--help` |
+
+也可以继续使用原生 Skills CLI，让它交互选择技能和安装位置：
 
 ```bash
 npx skills@1.7.0 add zzzhy03/academic-workflow
 ```
 
-也可以加 `--agent codex --global` 或 `--agent claude-code --global`，
-并用一个或多个 `--skill 名称` 指定内容。通过此工具安装后，用它更新：
+原生命令的选项以 Vercel 文档为准，不接收本仓库的 `--with-openpencil`。
+Skills CLI 从 Git 仓库安装，Bash 从正式 Release 安装；两种方式都不会自动上传用户的本地修改。
+自动软件/MCP 配置适用于 macOS/Linux 或 WSL，桌面应用不会自动安装或启动。
 
-```bash
-npx skills@1.7.0 update academic-paper-writing academic-diagram-design --global
-```
-
-Skills CLI 直接读取 Git 仓库，Bash 安装器读取正式 Release。
-因此 main 的新内容可能先于下一个 Release 出现在 Skills CLI 安装中。
-这些安装和更新操作都不会把用户本地修改自动推回 GitHub。
-
-## 可选的 OpenPencil 配套安装
-
-Bash 文件安装器不安装软件或改动 MCP 配置。原有 Node 安装入口继续保留，
-供 macOS/Linux 的 Codex 用户选用：
-
-```bash
-npx --yes --package=git+https://github.com/zzzhy03/academic-workflow.git academic-workflow install --all --with-openpencil --mcp-root "$PWD"
-```
-
-它需要 Git、Node/npm 和 Codex CLI，会调用 Skills CLI 安装选中的学术 skills 与
-OpenPencil 官方 skill，安装指定版本的 CLI/MCP，并为 Codex 注册 MCP。
-可以用一个或多个 `--skill` 替代 `--all`，或加 `--dry-run` 先看命令计划。
-Claude Code 用户可通过上面的通用方式安装 skills，再按其客户端方式配置 MCP。
-
-上游来源和版本放在 [dependencies.json](dependencies.json)。
-已有匹配工具/配置会复用；不同的 MCP 根目录或连接方式会保留并报告，
-工具版本不一致需要显式 `--update-tools` 才会替换。更新前应确认桌面版本兼容。
-`--project` 仅改变 skill 安装范围，额外软件包和 MCP 配置仍是用户级。
-
-桌面应用单独安装，见 [OpenPencil 官方说明](https://github.com/open-pencil/open-pencil)。
-脚本不会自动安装或启动桌面应用。桌面模式需要打开设计文档并重新连接 MCP；
-注册成功不等于已验证实际连接。现有自动配套安装暂不支持 Windows。
-安装失败会停止后续步骤并返回失败状态，之前已完成的步骤不会自动回滚。
-
-## GitHub Actions 在做什么
+## GitHub Actions
 
 两条流程共用 [scripts/build.py](scripts/build.py)：
 
 | 触发条件 | 执行内容 | 结果 |
 |---|---|---|
-| push 到 main 或提交 PR | 格式和引用检查、安装器测试、打包 | 保存为 Actions 构建产物，供检查 |
-| 推送版本标签，例如 v0.2.0 | 再次检查，核对版本号，再打包 | 创建公开 GitHub Release |
+| push 到 main 或提交 PR | 格式和引用检查、安装测试、打包 | Actions 构建产物 |
+| 推送版本标签，例如 v0.3.0 | 再次检查并核对版本号，再打包 | 公开 GitHub Release |
 
-Release 包含单个 skill ZIP、合集 ZIP、`install.sh`、`skills.txt`、版本清单和 SHA-256 校验值。
-Bash 测试在 Linux、macOS 执行；Windows 继续检查 Node 安装器和打包。
-这些都在 GitHub 的机器上执行，ZIP/Bash 用户无需安装维护者的构建环境。
-
-本地保存不会自动上传。推送 main 才触发 CI；版本标签才触发正式 Release。
-生成文件位于忽略的 `dist/`，不提交。当前不发布到 npm registry，
-`private: true` 防止意外发布自己的 Node 包。
+当前 Release 提供源码、两个独立 skill ZIP、一个合集 ZIP，以及 `install.sh`。
+源码下载由 GitHub 自动提供；安装所需的技能列表和 ZIP 校验信息包含在脚本中。
+本地保存不会自动上传，推送 main 才触发 CI，版本标签才触发正式发布。
 
 ## 维护与贡献
 
@@ -150,12 +123,10 @@ npm run validate
 npm run build
 ```
 
-以 `skills/` 中的源码为准。新增 skill 时，把目录加入这里，并登记到 `dependencies.json`；
-发布目录清单会自动生成。发布新版本时更新 package.json 和 lockfile，提交后推送匹配的版本标签。
-上游依赖版本应经过检查后再升级。
+以 `skills/` 中的源码为准。新增 skill 后登记到 `dependencies.json`，安装脚本的发布数据会自动生成。
+发布时更新 package.json 和 lockfile，提交后推送匹配的版本标签。
+纯文字修改以审阅为主，安装和打包修改应补充相应行为测试。
 
-欢迎提出可复用的改进。不要把私人研究材料、机器路径或单次案例规则混入通用 skills。
-文字修改以审阅为主；安装和打包修改需要相应行为测试。
-贡献方式见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-本仓库采用 [MIT License](LICENSE)。OpenPencil 和 Skills CLI 保留各自维护者与许可证。
+本仓库使用 [MIT License](LICENSE)。OpenPencil 官方 skill 的固定版本与许可证保留在
+[integrations/open-pencil](integrations/open-pencil/UPSTREAM.md)，CLI/MCP 仍从官方软件包安装。
+其他贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
