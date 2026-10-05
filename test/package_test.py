@@ -18,7 +18,7 @@ class DistributionTests(unittest.TestCase):
             for output in outputs:
                 subprocess.run([sys.executable, str(ROOT / 'scripts/build.py'), '--output', str(output)], check=True, capture_output=True)
             first, second = outputs
-            names = json.loads((ROOT / 'dependencies.json').read_text())['skills']
+            names = json.loads((ROOT / 'dependencies.json').read_text(encoding='utf-8'))['skills']
             for name in names:
                 archive = first / (name + '.zip')
                 self.assertEqual(archive.read_bytes(), (second / archive.name).read_bytes())
@@ -32,7 +32,7 @@ class DistributionTests(unittest.TestCase):
                 self.assertEqual(packed.read('LICENSE'), (ROOT / 'LICENSE').read_bytes())
                 for name in names:
                     self.assertIn('skills/' + name + '/SKILL.md', packed.namelist())
-            for line in (first / 'SHA256SUMS').read_text().splitlines():
+            for line in (first / 'SHA256SUMS').read_text(encoding='utf-8').splitlines():
                 digest, file = line.split('  ', 1)
                 self.assertEqual(digest, hashlib.sha256((first / file).read_bytes()).hexdigest())
 
@@ -42,10 +42,10 @@ class DistributionTests(unittest.TestCase):
         spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / 'dependencies.json').write_text(json.dumps({'skills': ['example']}))
+            (root / 'dependencies.json').write_text(json.dumps({'skills': ['example']}), encoding='utf-8')
             folder = root / 'skills/example'
             folder.mkdir(parents=True)
-            (folder / 'SKILL.md').write_text('---\nname: example\ndescription: Test\n---\n[Missing](references/missing.md)\n')
+            (folder / 'SKILL.md').write_text('---\nname: example\ndescription: Test\n---\n[Missing](references/missing.md)\n', encoding='utf-8')
             with self.assertRaisesRegex(ValueError, 'Missing or external'):
                 module.validate(root)
 

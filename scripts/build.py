@@ -21,7 +21,7 @@ def make_zip(destination, entries):
 def build(output):
     names = validate()
     output.mkdir(parents=True, exist_ok=True)
-    package = json.loads((ROOT / 'package.json').read_text())
+    package = json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))
     try:
         commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, stderr=subprocess.DEVNULL, text=True).strip()
     except subprocess.CalledProcessError:
@@ -42,12 +42,12 @@ def build(output):
     manifest = {
         'version': package['version'], 'commit': commit, 'skills': names,
         'archives': [{'file': file.name, 'sha256': hashlib.sha256(file.read_bytes()).hexdigest()} for file in paths],
-        'optionalDependencies': json.loads((ROOT / 'dependencies.json').read_text())['openPencil']
+        'optionalDependencies': json.loads((ROOT / 'dependencies.json').read_text(encoding='utf-8'))['openPencil']
     }
     manifest_path = output / 'manifest.json'
-    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     paths.append(manifest_path)
-    (output / 'SHA256SUMS').write_text(''.join(hashlib.sha256(file.read_bytes()).hexdigest() + '  ' + file.name + '\n' for file in paths))
+    (output / 'SHA256SUMS').write_text(''.join(hashlib.sha256(file.read_bytes()).hexdigest() + '  ' + file.name + '\n' for file in paths), encoding='utf-8')
     print('Built', len(names), 'individual ZIPs and one collection ZIP in', output)
 
 if __name__ == '__main__':

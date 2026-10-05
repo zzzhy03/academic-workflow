@@ -20,7 +20,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test && node scripts/python.mjs -m unittest discover -s test -p '*_test.py'",
+    "test": "node --test && node scripts/python.mjs test/package_test.py",
     "validate": "node scripts/python.mjs scripts/validate.py",
     "build": "node scripts/python.mjs scripts/build.py"
   },

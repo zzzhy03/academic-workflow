@@ -8,7 +8,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 def validate(root=ROOT):
-    config = json.loads((root / 'dependencies.json').read_text())
+    config = json.loads((root / 'dependencies.json').read_text(encoding='utf-8'))
     names = config['skills']
     found = sorted(p.name for p in (root / 'skills').iterdir() if p.is_dir())
     if sorted(names) != found:
@@ -18,7 +18,7 @@ def validate(root=ROOT):
             raise ValueError('Invalid skill directory name: ' + name)
         folder = root / 'skills' / name
         skill = folder / 'SKILL.md'
-        text = skill.read_text()
+        text = skill.read_text(encoding='utf-8')
         if not text.startswith('---\n'):
             raise ValueError(str(skill) + ': missing YAML frontmatter')
         parts = text.split('---', 2)
@@ -36,7 +36,7 @@ def validate(root=ROOT):
             if not file.is_file():
                 continue
             if file.suffix == '.md':
-                content = file.read_text()
+                content = file.read_text(encoding='utf-8')
                 if re.search(r'/(Users|Volumes)/', content):
                     raise ValueError('Machine-specific path in ' + str(file))
                 if '[TODO:' in content:
